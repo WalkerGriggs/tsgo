@@ -23,12 +23,12 @@ func main() {
 			log.Fatal(err)
 		}
 
-		h, err := tsgo.ParseHeader(b)
+		p, err := tsgo.ParsePacket(b)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		s, err := json.MarshalIndent(h, "", "\t")
+		s, err := json.MarshalIndent(p, "", "\t")
 		if err != nil {
 			log.Fatal(err)
 		}
