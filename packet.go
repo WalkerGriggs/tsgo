@@ -51,9 +51,15 @@ type Packet struct {
 	// adaptation field's discontinuity indicator is true.
 	ContinuityCounter uint8
 
+	// An optional variable-length extension field of the fixed-length TS
+	// Packet header, intended to convey clock references and timing and
+	// synchronization information as well as stuffing over an MPEG-2 Multiplex
 	AdaptationField *AdaptationField `json:",omitempty"`
 
-	ProgramAssociationTable *ProgramAssociationTable `json:",omitempty"`
+	// Program specific metadata like program association, conditional access,
+	// program mapping, and network information. This information will never be
+	// scrambled.
+	ProgramSpecificInformation *ProgramSpecificInformation `json:",omitempty"`
 }
 
 func ParsePacket(b []byte) (*Packet, error) {
@@ -86,12 +92,11 @@ func ParsePacket(b []byte) (*Packet, error) {
 		h.AdaptationField = af
 	}
 
-	if h.AdaptationFieldControl % 2 == 1 {
-		i += 1 // TODO (parse Payload pointer)
-		switch h.PacketID {
-		case 0:
-			h.ProgramAssociationTable = ParseProgramAssociationTable(b[i:])
-		}
+	if h.AdaptationFieldControl%2 == 1 {
+		// TODO (parse Payload pointer)
+		i += 1
+
+		h.ProgramSpecificInformation = ParseProgramSpecificInformation(b[i:])
 	}
 
 	return h, nil

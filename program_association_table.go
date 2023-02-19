@@ -12,11 +12,12 @@ type ProgramAssociationTable struct {
 }
 
 func ParseProgramAssociationTable(b []byte) *ProgramAssociationTable {
-	t := &ProgramAssociationTable {
+	t := &ProgramAssociationTable{
 		ProgramMap: make(map[uint16]uint16),
 	}
 
-	for i := 0; i < len(b) / 4; i += 4 {
+	// Iterate over 4 byte chunks
+	for i := 0; i < len(b)/4; i += 4 {
 		num := uint16(b[0])<<8 | uint16(b[1])
 		pid := uint16(b[2]&0x1f)<<8 | uint16(b[3])
 		t.ProgramMap[num] = pid
