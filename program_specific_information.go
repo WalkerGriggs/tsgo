@@ -5,6 +5,7 @@ type TableID uint16
 const (
 	PAT TableID = 0x00
 	PMT         = 0x02
+	NIL         = 0xff
 )
 
 func isKnownTable(id TableID) bool {
@@ -81,8 +82,9 @@ type PSISectionSyntax struct {
 }
 
 type PSISectionData struct {
-	PAT *ProgramAssociationTable `json:",omitempty"`
-	PMT *ProgramMapTable         `json:",omitempty"`
+	TableID TableID                  `json:"-"`
+	PAT     *ProgramAssociationTable `json:",omitempty"`
+	PMT     *ProgramMapTable         `json:",omitempty"`
 }
 
 func (p *Parser) ParseProgramSpecificInformation(b []byte) *ProgramSpecificInformation {
@@ -104,43 +106,33 @@ func (p *Parser) ParseProgramSpecificInformationSections(b []byte) []*PSISection
 		header := p.ParsePSISectionHeader(b[i : i+3])
 		i += 3
 
-		if header.TableID == 0xff || !isKnownTable(TableID(header.TableID)) {
+		tableID := TableID(header.TableID)
+		if tableID == NIL || !isKnownTable(tableID) {
 			return sections
 		}
-
-		sectionEnd := i + int(header.SectionLength)
-		dataEnd := sectionEnd - 4
 
 		syntax := p.ParsePSISectionSyntax(b[i : i+5])
 		i += 5
 
-		data := p.ParsePSISectionData(TableID(header.TableID), b[i:dataEnd])
+		dataStart := i
+		dataEnd := dataStart + int(header.SectionLength) - 4 // CRC
+		data := p.ParsePSISectionData(tableID, b[dataStart:dataEnd])
+		i += int(header.SectionLength) - 4
+
+		syntax.CRC32 = uint32(b[i])<<24 | uint32(b[i+1])<<16 |
+			uint32(b[i+2])<<8 | uint32(b[i+3])
+		i += 4
 
 		sections = append(sections, &PSISection{
 			Header: header,
 			Syntax: syntax,
 			Data:   data,
 		})
-
-		i = sectionEnd
 	}
 
 	return sections
 }
 
-func (p *Parser) ParsePSISectionData(tableID TableID, b []byte) *PSISectionData {
-	data := &PSISectionData{}
-
-	switch tableID {
-	case PAT:
-		data.PAT = p.ParseProgramAssociationTable(b)
-
-	case PMT:
-		data.PMT = p.ParseProgramMapTable(b)
-	}
-
-	return data
-}
 
 func (p *Parser) ParsePSISectionHeader(b []byte) *PSISectionHeader {
 	return &PSISectionHeader{
@@ -159,4 +151,20 @@ func (p *Parser) ParsePSISectionSyntax(b []byte) *PSISectionSyntax {
 		SectionNumber:        uint8(b[3]),
 		LastSectionNumber:    uint8(b[4]),
 	}
+}
+
+func (p *Parser) ParsePSISectionData(tableID TableID, b []byte) *PSISectionData {
+	data := &PSISectionData{
+		TableID: tableID,
+	}
+
+	switch tableID {
+	case PAT:
+		data.PAT = p.ParseProgramAssociationTable(b)
+
+	case PMT:
+		data.PMT = p.ParseProgramMapTable(b)
+	}
+
+	return data
 }
