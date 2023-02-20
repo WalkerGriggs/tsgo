@@ -18,7 +18,7 @@ type AdaptationField struct {
 	AdaptationExtension               *AdaptationExtension `json:",omitempty"`
 }
 
-func ParseAdaptationField(b []byte) (*AdaptationField, error) {
+func (p *Parser) ParseAdaptationField(b []byte) (*AdaptationField, error) {
 	i := 2 // read head
 	a := &AdaptationField{
 		AdaptationFieldLength:             uint8(b[0]),

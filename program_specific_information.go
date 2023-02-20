@@ -1,13 +1,36 @@
 package tsgo
 
+type TableID uint16
+
+const (
+	PAT TableID = 0x00
+	PMT         = 0x02
+)
+
+func isKnownTable(id TableID) bool {
+	switch id {
+	case PAT, PMT:
+		return true
+
+	default:
+		return false
+	}
+}
+
 type ProgramSpecificInformation struct {
-	PointerField int
-	Sections     []*PSISection
+	// Present at the start of the TS packet payload signaled by
+	// the payload_unit_start_indicator bit in the TS header. Used to set packet
+	// alignment bytes or content before the start of tabled payload data.
+	PointerField uint8
+
+	// Program specific information tables repeated until the end of the payload.
+	Sections []*PSISection
 }
 
 type PSISection struct {
 	Header *PSISectionHeader
 	Syntax *PSISectionSyntax
+	Data   *PSISectionData
 }
 
 type PSISectionHeader struct {
@@ -17,7 +40,7 @@ type PSISectionHeader struct {
 	// the repeat of table section end here and the rest of TS packet payload
 	// shall be stuffed with 0xFF. Consequently, the value 0xFF shall not be used
 	// for the Table Identifier.
-	TableID int
+	TableID uint8
 
 	// A flag that indicates if the syntax section follows the section length. The
 	// PAT, PMT, and CAT all set this to 1.
@@ -55,54 +78,80 @@ type PSISectionSyntax struct {
 	// A checksum of the entire table excluding the pointer field, pointer filler
 	// bytes and the trailing CRC32.
 	CRC32 uint32
-
-	// TableData -- Could be any one of these options
-	PAT *ProgramAssociationTable
 }
 
-func ParseProgramSpecificInformation(b []byte) *ProgramSpecificInformation {
-	psi := &ProgramSpecificInformation{
-		PointerField: int(b[0]),
-		Sections:     make([]*PSISection, 0),
-	}
+type PSISectionData struct {
+	PAT *ProgramAssociationTable `json:",omitempty"`
+	PMT *ProgramMapTable         `json:",omitempty"`
+}
 
-	for i := psi.PointerField; i < len(b); {
-		header := ParsePSISectionHeader(b[i : i+3])
+func (p *Parser) ParseProgramSpecificInformation(b []byte) *ProgramSpecificInformation {
+	pointerField := uint8(b[0])
+	i := int(pointerField) + 1
+
+	sections := p.ParseProgramSpecificInformationSections(b[i:])
+
+	return &ProgramSpecificInformation{
+		PointerField: pointerField,
+		Sections:     sections,
+	}
+}
+
+func (p *Parser) ParseProgramSpecificInformationSections(b []byte) []*PSISection {
+	sections := make([]*PSISection, 0)
+
+	for i := 0; i < len(b); {
+		header := p.ParsePSISectionHeader(b[i : i+3])
 		i += 3
 
-		if header.TableID == 0xff {
-			return psi
+		if header.TableID == 0xff || !isKnownTable(TableID(header.TableID)) {
+			return sections
 		}
 
-		syntax := ParsePSISectionSyntax(b[i : i+5])
+		sectionEnd := i + int(header.SectionLength)
+		dataEnd := sectionEnd - 4
+
+		syntax := p.ParsePSISectionSyntax(b[i : i+5])
 		i += 5
 
-		switch header.TableID {
-		case 0:
-			syntax.PAT = ParseProgramAssociationTable(b[i:])
-		}
+		data := p.ParsePSISectionData(TableID(header.TableID), b[i:dataEnd])
 
-		psi.Sections = append(psi.Sections, &PSISection{
+		sections = append(sections, &PSISection{
 			Header: header,
 			Syntax: syntax,
+			Data:   data,
 		})
 
-		i += int(header.SectionLength)
+		i = sectionEnd
 	}
 
-	return psi
+	return sections
 }
 
-func ParsePSISectionHeader(b []byte) *PSISectionHeader {
+func (p *Parser) ParsePSISectionData(tableID TableID, b []byte) *PSISectionData {
+	data := &PSISectionData{}
+
+	switch tableID {
+	case PAT:
+		data.PAT = p.ParseProgramAssociationTable(b)
+
+	case PMT:
+		data.PMT = p.ParseProgramMapTable(b)
+	}
+
+	return data
+}
+
+func (p *Parser) ParsePSISectionHeader(b []byte) *PSISectionHeader {
 	return &PSISectionHeader{
-		TableID:                int(b[0]),
+		TableID:                uint8(b[0]),
 		SectionSyntaxIndicator: b[1]>>7&0x1 > 0,
 		PrivateBit:             b[1]>>6&0x1 > 0,
 		SectionLength:          uint16(b[1]&0xf)<<8 | uint16(b[2]),
 	}
 }
 
-func ParsePSISectionSyntax(b []byte) *PSISectionSyntax {
+func (p *Parser) ParsePSISectionSyntax(b []byte) *PSISectionSyntax {
 	return &PSISectionSyntax{
 		TableIDExtension:     uint16(b[0])<<8 | uint16(b[1]),
 		VersionNumber:        uint8(b[2]&0x3f) >> 1,

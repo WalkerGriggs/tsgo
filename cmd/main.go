@@ -13,6 +13,10 @@ import (
 func main() {
 	b := make([]byte, 188)
 
+	parser := &tsgo.Parser {
+		ProgramMap: make(map[uint16]uint16),
+	}
+
 	for {
 		n, err := os.Stdin.Read(b)
 		if n == 0 && err == io.EOF {
@@ -23,7 +27,7 @@ func main() {
 			log.Fatal(err)
 		}
 
-		p, err := tsgo.ParsePacket(b)
+		p, err := parser.ParsePacket(b)
 		if err != nil {
 			log.Fatal(err)
 		}

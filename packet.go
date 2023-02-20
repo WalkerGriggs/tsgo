@@ -62,7 +62,11 @@ type Packet struct {
 	ProgramSpecificInformation *ProgramSpecificInformation `json:",omitempty"`
 }
 
-func ParsePacket(b []byte) (*Packet, error) {
+type Parser struct {
+	ProgramMap map[uint16]uint16
+}
+
+func (p *Parser) ParsePacket(b []byte) (*Packet, error) {
 	if b[0]&0xFF != 0x47 {
 		return nil, fmt.Errorf("Not a sync byte")
 	}
@@ -79,7 +83,7 @@ func ParsePacket(b []byte) (*Packet, error) {
 	}
 
 	if h.AdaptationFieldControl >= 3 {
-		af, err := ParseAdaptationField(b[i:])
+		af, err := p.ParseAdaptationField(b[i:])
 		if err != nil {
 			return nil, err
 		}
@@ -92,12 +96,20 @@ func ParsePacket(b []byte) (*Packet, error) {
 		h.AdaptationField = af
 	}
 
-	if h.AdaptationFieldControl%2 == 1 {
-		// TODO (parse Payload pointer)
-		i += 1
-
-		h.ProgramSpecificInformation = ParseProgramSpecificInformation(b[i:])
+	if h.AdaptationFieldControl%2 == 1 && isPSI(h.PacketID, p.ProgramMap) {
+		h.ProgramSpecificInformation = p.ParseProgramSpecificInformation(b[i:])
 	}
 
 	return h, nil
+}
+
+func isPSI(pid uint16, pm map[uint16]uint16) bool {
+	if _, ok := pm[pid]; ok {
+		return true
+	}
+	return pid == 0
+}
+
+func isPES(b []byte) bool {
+	return uint32(b[0])<<16|uint32(b[1])<<8|uint32(b[2]) == 1
 }
