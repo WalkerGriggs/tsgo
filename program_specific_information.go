@@ -31,7 +31,6 @@ type ProgramSpecificInformation struct {
 type PSISection struct {
 	Header *PSISectionHeader
 	Syntax *PSISectionSyntax
-	Data   *PSISectionData
 }
 
 type PSISectionHeader struct {
@@ -79,19 +78,16 @@ type PSISectionSyntax struct {
 	// A checksum of the entire table excluding the pointer field, pointer filler
 	// bytes and the trailing CRC32.
 	CRC32 uint32
-}
 
-type PSISectionData struct {
-	TableID TableID                  `json:"-"`
 	PAT     *ProgramAssociationTable `json:",omitempty"`
 	PMT     *ProgramMapTable         `json:",omitempty"`
 }
 
-func (p *Parser) ParseProgramSpecificInformation(b []byte) *ProgramSpecificInformation {
-	pointerField := uint8(b[0])
-	i := int(pointerField) + 1
+func (p *Parser) ParseProgramSpecificInformation() *ProgramSpecificInformation {
+	pointerField := uint8(p.ReadByte())
+	p.Inc(uint(pointerField))
 
-	sections := p.ParseProgramSpecificInformationSections(b[i:])
+	sections := p.ParseProgramSpecificInformationSections()
 
 	return &ProgramSpecificInformation{
 		PointerField: pointerField,
@@ -99,72 +95,59 @@ func (p *Parser) ParseProgramSpecificInformation(b []byte) *ProgramSpecificInfor
 	}
 }
 
-func (p *Parser) ParseProgramSpecificInformationSections(b []byte) []*PSISection {
+func (p *Parser) ParseProgramSpecificInformationSections() []*PSISection {
 	sections := make([]*PSISection, 0)
 
-	for i := 0; i < len(b); {
-		header := p.ParsePSISectionHeader(b[i : i+3])
-		i += 3
+	for i := 0; i < len(p.b); {
+		header := p.ParsePSISectionHeader()
 
-		tableID := TableID(header.TableID)
-		if tableID == NIL || !isKnownTable(tableID) {
+		if !isKnownTable(TableID(header.TableID)) {
 			return sections
 		}
 
-		syntax := p.ParsePSISectionSyntax(b[i : i+5])
-		i += 5
+		syntax := p.ParsePSISectionSyntax()
 
-		dataStart := i
-		dataEnd := dataStart + int(header.SectionLength) - 4 // CRC
-		data := p.ParsePSISectionData(tableID, b[dataStart:dataEnd])
-		i += int(header.SectionLength) - 4
+		l := int(header.SectionLength) - 4
+		switch TableID(header.TableID) {
+		case PAT:
+			syntax.PAT = p.ParseProgramAssociationTable(l)
 
-		syntax.CRC32 = uint32(b[i])<<24 | uint32(b[i+1])<<16 |
-			uint32(b[i+2])<<8 | uint32(b[i+3])
-		i += 4
+		case PMT:
+			syntax.PMT = p.ParseProgramMapTable(l)
+		}
+
+		bs := p.ReadBytes(4)
+		syntax.CRC32 = uint32(bs[0])<<24 | uint32(bs[1])<<16 |
+			uint32(bs[2])<<8 | uint32(bs[3])
 
 		sections = append(sections, &PSISection{
 			Header: header,
 			Syntax: syntax,
-			Data:   data,
 		})
 	}
 
 	return sections
 }
 
+func (p *Parser) ParsePSISectionHeader() *PSISectionHeader {
+	bs := p.ReadBytes(3)
 
-func (p *Parser) ParsePSISectionHeader(b []byte) *PSISectionHeader {
 	return &PSISectionHeader{
-		TableID:                uint8(b[0]),
-		SectionSyntaxIndicator: b[1]>>7&0x1 > 0,
-		PrivateBit:             b[1]>>6&0x1 > 0,
-		SectionLength:          uint16(b[1]&0xf)<<8 | uint16(b[2]),
+		TableID:                uint8(bs[0]),
+		SectionSyntaxIndicator: bs[1]>>7&0x1 > 0,
+		PrivateBit:             bs[1]>>6&0x1 > 0,
+		SectionLength:          uint16(bs[1]&0xf)<<8 | uint16(bs[2]),
 	}
 }
 
-func (p *Parser) ParsePSISectionSyntax(b []byte) *PSISectionSyntax {
+func (p *Parser) ParsePSISectionSyntax() *PSISectionSyntax {
+	bs := p.ReadBytes(5)
+
 	return &PSISectionSyntax{
-		TableIDExtension:     uint16(b[0])<<8 | uint16(b[1]),
-		VersionNumber:        uint8(b[2]&0x3f) >> 1,
-		CurrentNextIndicator: b[2]&0x1 > 0,
-		SectionNumber:        uint8(b[3]),
-		LastSectionNumber:    uint8(b[4]),
+		TableIDExtension:     uint16(bs[0])<<8 | uint16(bs[1]),
+		VersionNumber:        uint8(bs[2]&0x3f) >> 1,
+		CurrentNextIndicator: bs[2]&0x1 > 0,
+		SectionNumber:        uint8(bs[3]),
+		LastSectionNumber:    uint8(bs[4]),
 	}
-}
-
-func (p *Parser) ParsePSISectionData(tableID TableID, b []byte) *PSISectionData {
-	data := &PSISectionData{
-		TableID: tableID,
-	}
-
-	switch tableID {
-	case PAT:
-		data.PAT = p.ParseProgramAssociationTable(b)
-
-	case PMT:
-		data.PMT = p.ParseProgramMapTable(b)
-	}
-
-	return data
 }

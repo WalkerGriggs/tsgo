@@ -18,48 +18,44 @@ type AdaptationField struct {
 	AdaptationExtension               *AdaptationExtension `json:",omitempty"`
 }
 
-func (p *Parser) ParseAdaptationField(b []byte) (*AdaptationField, error) {
-	i := 2 // read head
+func (p *Parser) ParseAdaptationField() (*AdaptationField, error) {
+	bs := p.ReadBytes(2)
+
 	a := &AdaptationField{
-		AdaptationFieldLength:             uint8(b[0]),
-		DiscontinuityIndicator:            b[1]>>7&0x1 > 0,
-		RandomAccessIndicator:             b[1]>>6&0x1 > 0,
-		ElementaryStreamPriorityIndicator: b[1]>>5&0x1 > 0,
-		ProgramClockReferenceFlag:         b[1]>>4&0x1 > 0,
-		OriginalProgramClockReferenceFlag: b[1]>>3&0x1 > 0,
-		SplicingPointFlag:                 b[1]>>2&0x1 > 0,
-		TransportPrivateDataFlag:          b[1]>>1&0x1 > 0,
-		AdaptationFieldExtensionFlag:      b[1]&0x1 > 0,
+		AdaptationFieldLength:             uint8(bs[0]),
+		DiscontinuityIndicator:            bs[1]>>7&0x1 > 0,
+		RandomAccessIndicator:             bs[1]>>6&0x1 > 0,
+		ElementaryStreamPriorityIndicator: bs[1]>>5&0x1 > 0,
+		ProgramClockReferenceFlag:         bs[1]>>4&0x1 > 0,
+		OriginalProgramClockReferenceFlag: bs[1]>>3&0x1 > 0,
+		SplicingPointFlag:                 bs[1]>>2&0x1 > 0,
+		TransportPrivateDataFlag:          bs[1]>>1&0x1 > 0,
+		AdaptationFieldExtensionFlag:      bs[1]&0x1 > 0,
 	}
 
 	if a.ProgramClockReferenceFlag {
-		a.ProgramClockReference = ParseClockReference(b[i : i+7])
-		i += 6
+		a.ProgramClockReference = ParseClockReference(p.ReadBytes(6))
 	}
 
 	if a.OriginalProgramClockReferenceFlag {
-		a.OriginalProgramClockReference = ParseClockReference(b[i : i+7])
-		i += 6
+		a.OriginalProgramClockReference = ParseClockReference(p.ReadBytes(6))
 	}
 
 	if a.SplicingPointFlag {
-		a.SpliceCountdown = int8(b[i])
-		i += 1
+		a.SpliceCountdown = int8(p.ReadByte())
 	}
 
 	if a.TransportPrivateDataFlag {
-		a.TransportPrivateDataLength = uint8(b[i])
-		i += 1
-
-		a.TransportPrivateData = b[i : i+int(a.TransportPrivateDataLength+1)]
-		i += int(a.TransportPrivateDataLength)
+		a.TransportPrivateDataLength = uint8(p.ReadByte())
+		a.TransportPrivateData = p.ReadBytes(uint(a.TransportPrivateDataLength))
 	}
 
 	if a.AdaptationFieldExtensionFlag {
-		l := int(b[i])
+		l := uint(p.ReadByte())
+		p.Dec(1)
 
 		var err error
-		if a.AdaptationExtension, err = ParseAdaptationExtension(b[i : i+l+1]); err != nil {
+		if a.AdaptationExtension, err = ParseAdaptationExtension(p.ReadBytes(l)); err != nil {
 			return nil, err
 		}
 	}

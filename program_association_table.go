@@ -14,14 +14,15 @@ type ProgramAssociationTable struct {
 	ProgramMap map[uint16]uint16
 }
 
-func (p *Parser) ParseProgramAssociationTable(b []byte) *ProgramAssociationTable {
+func (p *Parser) ParseProgramAssociationTable(l int) *ProgramAssociationTable {
 	t := &ProgramAssociationTable{
 		ProgramMap: make(map[uint16]uint16),
 	}
 
-	for i := 0; i < len(b)/4; i += 4 {
-		num := uint16(b[0])<<8 | uint16(b[1])
-		pid := uint16(b[2]&0x1f)<<8 | uint16(b[3])
+	for i := 0; i < l / 4; i += 4 {
+		bs := p.ReadBytes(4)
+		num := uint16(bs[0])<<8 | uint16(bs[1])
+		pid := uint16(bs[2]&0x1f)<<8 | uint16(bs[3])
 		t.ProgramMap[pid] = num // local, PAT map
 		p.ProgramMap[pid] = num // global, parser map
 	}
