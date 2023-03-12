@@ -51,7 +51,7 @@ func (p *Parser) ParseProgramMapTable(l int) *ProgramMapTable {
 
 	// Iterate over 8 byte chunks until the end of the section, accounting for the
 	// 4 byte CRC32.
-	for i := 0; i < l / 8; i += 8 {
+	for i := 0; i < l/8; i += 8 {
 		bs = p.ReadBytes(8)
 
 		info := &ElementaryStreamInfo{

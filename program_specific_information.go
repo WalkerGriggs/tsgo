@@ -79,19 +79,13 @@ type PSISectionSyntax struct {
 	// bytes and the trailing CRC32.
 	CRC32 uint32
 
-	PAT     *ProgramAssociationTable `json:",omitempty"`
-	PMT     *ProgramMapTable         `json:",omitempty"`
+	PAT *ProgramAssociationTable `json:",omitempty"`
+	PMT *ProgramMapTable         `json:",omitempty"`
 }
 
 func (p *Parser) ParseProgramSpecificInformation() *ProgramSpecificInformation {
-	pointerField := uint8(p.ReadByte())
-	p.Inc(uint(pointerField))
-
-	sections := p.ParseProgramSpecificInformationSections()
-
-	return &ProgramSpecificInformation{
-		PointerField: pointerField,
-		Sections:     sections,
+	return &ProgramSpecificInformation{ 
+		Sections: p.ParseProgramSpecificInformationSections(),
 	}
 }
 

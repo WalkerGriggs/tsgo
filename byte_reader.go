@@ -11,6 +11,14 @@ type ByteReader struct {
 	i uint
 }
 
+// Len is used to check the length of the buffer.
+func (r *ByteReader) Len() int {
+	r.Lock()
+	defer r.Unlock()
+
+	return len(r.b)
+}
+
 // Index is used to check the buffer pointers current position.
 func (r *ByteReader) Position() uint {
 	r.Lock()

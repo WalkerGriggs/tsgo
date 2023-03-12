@@ -19,7 +19,7 @@ func (p *Parser) ParseProgramAssociationTable(l int) *ProgramAssociationTable {
 		ProgramMap: make(map[uint16]uint16),
 	}
 
-	for i := 0; i < l / 4; i += 4 {
+	for i := 0; i < l/4; i += 4 {
 		bs := p.ReadBytes(4)
 		num := uint16(bs[0])<<8 | uint16(bs[1])
 		pid := uint16(bs[2]&0x1f)<<8 | uint16(bs[3])

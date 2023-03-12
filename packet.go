@@ -60,6 +60,8 @@ type Packet struct {
 	// program mapping, and network information. This information will never be
 	// scrambled.
 	ProgramSpecificInformation *ProgramSpecificInformation `json:",omitempty"`
+
+	PacketizedElementaryStream *PacketizedElementaryStream `json:",omitempty"`
 }
 
 type Parser struct {
@@ -93,8 +95,20 @@ func (p *Parser) ParsePacket(in []byte) (*Packet, error) {
 		}
 	}
 
-	if h.AdaptationFieldControl%2 == 1 && isPSI(h.PacketID, p.ProgramMap) {
-		h.ProgramSpecificInformation = p.ParseProgramSpecificInformation()
+	if h.AdaptationFieldControl%2 == 1 {
+		if h.PayloadUnitStartIndicator {
+			pointerField := uint8(p.ReadByte())
+			p.Inc(uint(pointerField))
+		}
+
+		if isPSI(h.PacketID, p.ProgramMap) {
+			h.ProgramSpecificInformation = p.ParseProgramSpecificInformation()
+		}
+
+		p.Dec(1) // TODO: why is this needed
+		if bs := p.ReadBytes(3); isPES(bs) {
+			h.PacketizedElementaryStream = p.ParsePacketizedElementaryStream()
+		}
 	}
 
 	return h, nil
