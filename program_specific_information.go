@@ -84,7 +84,7 @@ type PSISectionSyntax struct {
 }
 
 func (p *Parser) ParseProgramSpecificInformation() *ProgramSpecificInformation {
-	return &ProgramSpecificInformation{ 
+	return &ProgramSpecificInformation{
 		Sections: p.ParseProgramSpecificInformationSections(),
 	}
 }

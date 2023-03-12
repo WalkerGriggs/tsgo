@@ -21,9 +21,6 @@ type PacketizedElementaryStream struct {
 }
 
 type OptionalPacketizedElementaryHeader struct {
-	// 10 binary or 0x2 hex
-	MarkerBits uint8
-
 	// 00 implies not scrambled
 	ScramblingControl uint8
 
@@ -65,7 +62,6 @@ func (p *Parser) ParsePacketizedElementaryStream() *PacketizedElementaryStream {
 
 	bs = p.ReadBytes(3)
 	pes.OptionalPESHeader = &OptionalPacketizedElementaryHeader{
-		MarkerBits:             uint8(bs[0]) >> 6,
 		ScramblingControl:      uint8(bs[0]) >> 4 & 0x3,
 		Priority:               uint8(bs[0])&0x8 > 0,
 		DataAlignmentIndicator: uint8(bs[0])&0x4 > 0,
